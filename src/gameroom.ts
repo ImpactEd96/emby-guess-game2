@@ -291,9 +291,21 @@ export class GameRoom {
   private async stageClip(movieId: string, roundNumber: number): Promise<void> {
     const duration = parseInt(this.env.CLIP_DURATION_SECONDS || '3');
 
+    // Get media source ID
+    const itemResponse = await fetch(
+      `${this.env.EMBY_URL}/Users/${this.env.EMBY_USER_ID}/Items/${movieId}?Fields=MediaSources`,
+      { headers: { 'X-Emby-Token': this.env.EMBY_API_KEY } }
+    );
+    const itemData = await itemResponse.json() as { MediaSources?: Array<{ Id: string }> };
+    const mediaSourceId = itemData.MediaSources?.[0]?.Id;
+
+    if (!mediaSourceId) {
+      throw new Error('No media source found for movie');
+    }
+
     // Get HLS master playlist
     const masterResponse = await fetch(
-      `${this.env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${movieId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0`,
+      `${this.env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0`,
       {
         headers: { 'X-Emby-Token': this.env.EMBY_API_KEY },
       }

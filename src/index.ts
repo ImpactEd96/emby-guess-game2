@@ -181,8 +181,22 @@ export default {
       }
 
       try {
-        const duration = parseInt(env.CLIP_DURATION_SECONDS || '3');
-        const apiUrl = `${env.EMBY_URL}/Videos/${itemId}/master.m3u8?MediaSourceId=${itemId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0`;
+        // First get the media source ID for this item
+        const itemResponse = await fetch(
+          `${env.EMBY_URL}/Users/${env.EMBY_USER_ID}/Items/${itemId}?Fields=MediaSources`,
+          { headers: { 'X-Emby-Token': env.EMBY_API_KEY } }
+        );
+        const itemData = await itemResponse.json() as { MediaSources?: Array<{ Id: string }> };
+        const mediaSourceId = itemData.MediaSources?.[0]?.Id;
+
+        if (!mediaSourceId) {
+          return new Response(
+            JSON.stringify({ error: 'No media source found for item', itemData }),
+            { headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+          );
+        }
+
+        const apiUrl = `${env.EMBY_URL}/Videos/${itemId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0`;
         const response = await fetch(apiUrl, {
           headers: { 'X-Emby-Token': env.EMBY_API_KEY },
         });
@@ -192,7 +206,7 @@ export default {
         return new Response(
           JSON.stringify({
             status: response.status,
-            statusText: response.statusText,
+            mediaSourceId,
             url: apiUrl,
             responsePreview: responseText.substring(0, 1000),
           }),
@@ -236,9 +250,21 @@ export default {
 async function stageClip(env: Env, movieId: string, roomCode: string, roundNumber: number): Promise<void> {
   const duration = parseInt(env.CLIP_DURATION_SECONDS || '3');
 
+  // Get media source ID
+  const itemResponse = await fetch(
+    `${env.EMBY_URL}/Users/${env.EMBY_USER_ID}/Items/${movieId}?Fields=MediaSources`,
+    { headers: { 'X-Emby-Token': env.EMBY_API_KEY } }
+  );
+  const itemData = await itemResponse.json() as { MediaSources?: Array<{ Id: string }> };
+  const mediaSourceId = itemData.MediaSources?.[0]?.Id;
+
+  if (!mediaSourceId) {
+    throw new Error('No media source found for movie');
+  }
+
   // Get HLS master playlist
   const masterResponse = await fetch(
-    `${env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${movieId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0`,
+    `${env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0`,
     {
       headers: { 'X-Emby-Token': env.EMBY_API_KEY },
     }
