@@ -182,23 +182,20 @@ export default {
 
       try {
         const duration = parseInt(env.CLIP_DURATION_SECONDS || '3');
-        const response = await fetch(
-          `${env.EMBY_URL}/Videos/${itemId}/master.m3u8?MediaSourceId=${itemId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0`,
-          {
-            headers: { 'X-Emby-Token': env.EMBY_API_KEY },
-          }
-        );
+        const apiUrl = `${env.EMBY_URL}/Videos/${itemId}/master.m3u8?MediaSourceId=${itemId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0`;
+        const response = await fetch(apiUrl, {
+          headers: { 'X-Emby-Token': env.EMBY_API_KEY },
+        });
 
-        if (!response.ok) {
-          return new Response(
-            JSON.stringify({ error: `Emby returned ${response.status}` }),
-            { headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
-          );
-        }
+        const responseText = await response.text();
 
-        const playlist = await response.text();
         return new Response(
-          JSON.stringify({ success: true, playlistPreview: playlist.substring(0, 500) }),
+          JSON.stringify({
+            status: response.status,
+            statusText: response.statusText,
+            url: apiUrl,
+            responsePreview: responseText.substring(0, 1000),
+          }),
           { headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
         );
       } catch (error) {
