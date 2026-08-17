@@ -1,0 +1,32 @@
+name = "emby-guess-game"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Static assets
+[assets]
+directory = "public"
+binding = "ASSETS"
+
+# Durable Object for game state
+[durable_objects]
+bindings = [
+  { name = "GAME_ROOM", class_name = "GameRoom" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["GameRoom"]
+
+# R2 bucket for clips and posters
+[[r2_buckets]]
+binding = "CLIPS_BUCKET"
+bucket_name = "emby-guess-clips"
+
+# Environment variables
+[vars]
+EMBY_URL = "https://emby.kimpton.tech"
+EMBY_USER_ID = "9e7b29a7d9cb4920996f93ea911e9ac3"
+# EMBY_API_KEY should be set via: wrangler secret put EMBY_API_KEY
+# CLIP_QUEUE_DEPTH = "4"
+# CLIP_DURATION_SECONDS = "3"

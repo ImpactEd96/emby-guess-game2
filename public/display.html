@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emby Guess Game - Display</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.0/dist/hls.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #0a0a0a;
+            color: white;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        .room-code {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #e94560;
+        }
+
+        .timer {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #ff6b6b;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            position: relative;
+        }
+
+        .video-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+        }
+
+        video {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .scoreboard {
+            width: 300px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .scoreboard h2 {
+            margin-bottom: 20px;
+            color: #e94560;
+            font-size: 1.5rem;
+        }
+
+        .player-score {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+
+        .player-score.winner {
+            background: rgba(233, 69, 96, 0.3);
+            border: 1px solid #e94560;
+        }
+
+        .player-name {
+            font-weight: bold;
+        }
+
+        .player-points {
+            color: #ff6b6b;
+            font-weight: bold;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .movie-title {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            color: #e94560;
+        }
+
+        .winner-announcement {
+            font-size: 2rem;
+            color: #ff6b6b;
+        }
+
+        .waiting-message {
+            font-size: 1.5rem;
+            color: #888;
+        }
+
+        .round-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            font-size: 1.2rem;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="room-code">Room: <span id="roomCode">---</span></div>
+            <div class="timer" id="timer">--</div>
+        </div>
+        
+        <div class="main-content">
+            <div class="video-container">
+                <video id="video" autoplay muted></video>
+                
+                <div class="overlay" id="revealOverlay">
+                    <div class="movie-title" id="movieTitle">---</div>
+                    <div class="winner-announcement" id="winnerAnnouncement">---</div>
+                </div>
+                
+                <div class="overlay active" id="waitingOverlay">
+                    <div class="waiting-message">Waiting for players...</div>
+                </div>
+            </div>
+            
+            <div class="scoreboard">
+                <h2>🏆 Scoreboard</h2>
+                <div id="scoreboardList"></div>
+            </div>
+        </div>
+        
+        <div class="round-info">Round <span id="roundNumber">0</span></div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const roomCodeEl = document.getElementById('roomCode');
+        const timerEl = document.getElementById('timer');
+        const revealOverlay = document.getElementById('revealOverlay');
+        const waitingOverlay = document.getElementById('waitingOverlay');
+        const movieTitleEl = document.getElementById('movieTitle');
+        const winnerAnnouncementEl = document.getElementById('winnerAnnouncement');
+        const scoreboardList = document.getElementById('scoreboardList');
+        const roundNumberEl = document.getElementById('roundNumber');
+
+        let hls = null;
+        let ws = null;
+        let currentRound = 0;
+
+        // Connect to WebSocket
+        function connect() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws?room=default`);
+            
+            ws.onopen = () => {
+                ws.send(JSON.stringify({ type: 'join', role: 'display' }));
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleMessage(data);
+            };
+            
+            ws.onclose = () => {
+                setTimeout(connect, 3000);
+            };
+        }
+
+        function handleMessage(data) {
+            switch (data.type) {
+                case 'round_start':
+                    startRound(data.round, data.clipUrl);
+                    break;
+                case 'round_end':
+                    endRound(data.winner, data.correctAnswer);
+                    break;
+                case 'scoreboard':
+                    updateScoreboard(data.players);
+                    break;
+                case 'timer':
+                    updateTimer(data.secondsLeft);
+                    break;
+                case 'error':
+                    console.error('Error:', data.message);
+                    break;
+            }
+        }
+
+        function startRound(round, clipUrl) {
+            currentRound = round.number;
+            roundNumberEl.textContent = currentRound;
+            
+            waitingOverlay.classList.remove('active');
+            revealOverlay.classList.remove('active');
+            
+            // Load video
+            if (clipUrl) {
+                loadVideo(clipUrl);
+            }
+        }
+
+        function loadVideo(url) {
+            if (hls) {
+                hls.destroy();
+            }
+            
+            if (Hls.isSupported()) {
+                hls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                });
+                hls.loadSource(url);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    video.play();
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = url;
+                video.play();
+            }
+        }
+
+        function endRound(winner, correctAnswer) {
+            if (hls) {
+                hls.pause();
+            }
+            
+            movieTitleEl.textContent = correctAnswer;
+            winnerAnnouncementEl.textContent = winner ? `${winner} wins!` : 'No winner!';
+            revealOverlay.classList.add('active');
+        }
+
+        function updateTimer(secondsLeft) {
+            timerEl.textContent = secondsLeft;
+            
+            if (secondsLeft <= 5) {
+                timerEl.style.color = '#ff0000';
+            } else {
+                timerEl.style.color = '#ff6b6b';
+            }
+        }
+
+        function updateScoreboard(players) {
+            scoreboardList.innerHTML = '';
+            
+            // Sort by score descending
+            const sorted = [...players].sort((a, b) => b.score - a.score);
+            
+            sorted.forEach((player, index) => {
+                const div = document.createElement('div');
+                div.className = 'player-score';
+                if (player.name === winnerAnnouncementEl.textContent.replace(' wins!', '')) {
+                    div.classList.add('winner');
+                }
+                div.innerHTML = `
+                    <span class="player-name">${player.name}</span>
+                    <span class="player-points">${player.score} pts</span>
+                `;
+                scoreboardList.appendChild(div);
+            });
+        }
+
+        // Get room code
+        fetch('/api/code?room=default')
+            .then(res => res.json())
+            .then(data => {
+                roomCodeEl.textContent = data.code;
+            });
+
+        connect();
+    </script>
+</body>
+</html>

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emby Guess Game - Debug</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #e94560;
+            margin-bottom: 30px;
+        }
+
+        .test-section {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .test-section h2 {
+            color: #ff6b6b;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+        }
+
+        .test-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #333;
+            border-radius: 5px;
+        }
+
+        .test-label {
+            font-weight: bold;
+        }
+
+        .test-status {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+
+        .status-pending {
+            background: #555;
+            color: #aaa;
+        }
+
+        .status-pass {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .status-fail {
+            background: #f44336;
+            color: white;
+        }
+
+        .status-loading {
+            background: #ff9800;
+            color: white;
+        }
+
+        .test-details {
+            margin-top: 10px;
+            padding: 10px;
+            background: #1a1a1a;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            display: none;
+        }
+
+        .test-details.show {
+            display: block;
+        }
+
+        .run-all-btn {
+            background: linear-gradient(90deg, #e94560, #ff6b6b);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        .run-all-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(233, 69, 96, 0.3);
+        }
+
+        .back-link {
+            color: #e94560;
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Back to Home</a>
+        
+        <h1>🔧 Debug Panel</h1>
+        
+        <button class="run-all-btn" onclick="runAllTests()">Run All Tests</button>
+        
+        <div class="test-section">
+            <h2>1. Configuration</h2>
+            <div class="test-item">
+                <span class="test-label">Environment Variables</span>
+                <span class="test-status status-pending" id="configStatus">Pending</span>
+            </div>
+            <div class="test-details" id="configDetails"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>2. Emby Connectivity</h2>
+            <div class="test-item">
+                <span class="test-label">Server Connection</span>
+                <span class="test-status status-pending" id="embyStatus">Pending</span>
+            </div>
+            <div class="test-details" id="embyDetails"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>3. Emby Authentication</h2>
+            <div class="test-item">
+                <span class="test-label">API Key Valid</span>
+                <span class="test-status status-pending" id="authStatus">Pending</span>
+            </div>
+            <div class="test-details" id="authDetails"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>4. Library Access</h2>
+            <div class="test-item">
+                <span class="test-label">Movies Available</span>
+                <span class="test-status status-pending" id="libraryStatus">Pending</span>
+            </div>
+            <div class="test-details" id="libraryDetails"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>5. HLS Transcoding</h2>
+            <div class="test-item">
+                <span class="test-label">Transcode Test</span>
+                <span class="test-status status-pending" id="transcodeStatus">Pending</span>
+            </div>
+            <div class="test-details" id="transcodeDetails"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>6. R2 Bucket</h2>
+            <div class="test-item">
+                <span class="test-label">Bucket Access</span>
+                <span class="test-status status-pending" id="r2Status">Pending</span>
+            </div>
+            <div class="test-details" id="r2Details"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>7. Full Pipeline</h2>
+            <div class="test-item">
+                <span class="test-label">End-to-End Test</span>
+                <span class="test-status status-pending" id="pipelineStatus">Pending</span>
+            </div>
+            <div class="test-details" id="pipelineDetails"></div>
+        </div>
+    </div>
+
+    <script>
+        async function runTest(name, endpoint, options = {}) {
+            const statusEl = document.getElementById(`${name}Status`);
+            const detailsEl = document.getElementById(`${name}Details`);
+            
+            statusEl.className = 'test-status status-loading';
+            statusEl.textContent = 'Testing...';
+            detailsEl.className = 'test-details show';
+            detailsEl.textContent = 'Running test...';
+            
+            try {
+                const response = await fetch(endpoint, options);
+                const data = await response.json();
+                
+                if (response.ok && !data.error) {
+                    statusEl.className = 'test-status status-pass';
+                    statusEl.textContent = 'PASS';
+                } else {
+                    statusEl.className = 'test-status status-fail';
+                    statusEl.textContent = 'FAIL';
+                }
+                
+                detailsEl.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                statusEl.className = 'test-status status-fail';
+                statusEl.textContent = 'ERROR';
+                detailsEl.textContent = error.message;
+            }
+        }
+
+        async function runAllTests() {
+            await runTest('config', '/api/debug/config');
+            await runTest('emby', '/api/debug/emby');
+            await runTest('auth', '/api/debug/emby');
+            await runTest('library', '/api/debug/library');
+            await runTest('r2', '/api/debug/r2');
+            
+            // Get a movie ID for transcode test
+            try {
+                const libResponse = await fetch('/api/debug/library');
+                const libData = await libResponse.json();
+                
+                if (libData.movies && libData.movies.length > 0) {
+                    const movieId = libData.movies[0].id;
+                    await runTest('transcode', `/api/debug/transcode?itemId=${movieId}`);
+                } else {
+                    const statusEl = document.getElementById('transcodeStatus');
+                    statusEl.className = 'test-status status-fail';
+                    statusEl.textContent = 'SKIP';
+                    document.getElementById('transcodeDetails').textContent = 'No movies available for testing';
+                }
+            } catch (error) {
+                const statusEl = document.getElementById('transcodeStatus');
+                statusEl.className = 'test-status status-fail';
+                statusEl.textContent = 'ERROR';
+                document.getElementById('transcodeDetails').textContent = error.message;
+            }
+            
+            // Pipeline test
+            const pipelineStatus = document.getElementById('pipelineStatus');
+            const pipelineDetails = document.getElementById('pipelineDetails');
+            
+            const allPassed = [
+                'config', 'emby', 'auth', 'library', 'r2'
+            ].every(id => {
+                const status = document.getElementById(`${id}Status`);
+                return status.textContent === 'PASS';
+            });
+            
+            if (allPassed) {
+                pipelineStatus.className = 'test-status status-pass';
+                pipelineStatus.textContent = 'PASS';
+                pipelineDetails.textContent = 'All systems operational';
+            } else {
+                pipelineStatus.className = 'test-status status-fail';
+                pipelineStatus.textContent = 'FAIL';
+                pipelineDetails.textContent = 'Some tests failed - check above';
+            }
+        }
+
+        // Auto-run tests on load
+        runAllTests();
+    </script>
+</body>
+</html>
