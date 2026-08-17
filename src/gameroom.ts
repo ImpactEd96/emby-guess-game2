@@ -293,7 +293,7 @@ export class GameRoom {
 
     // Get HLS master playlist
     const masterResponse = await fetch(
-      `${this.env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${movieId}&Static=false&Container=ts&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0&SegmentLength=${duration}`,
+      `${this.env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${movieId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0`,
       {
         headers: { 'X-Emby-Token': this.env.EMBY_API_KEY },
       }
