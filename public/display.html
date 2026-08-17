@@ -202,8 +202,12 @@
             };
             
             ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                handleMessage(data);
+                try {
+                    const data = JSON.parse(event.data);
+                    handleMessage(data);
+                } catch (e) {
+                    console.error('Failed to parse message:', event.data);
+                }
             };
             
             ws.onclose = () => {

@@ -77,7 +77,8 @@ export class GameRoom {
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     try {
-      const data = JSON.parse(message.toString()) as WSMessage;
+      const text = typeof message === 'string' ? message : new TextDecoder().decode(message);
+      const data = JSON.parse(text) as WSMessage;
 
       switch (data.type) {
         case 'join':
