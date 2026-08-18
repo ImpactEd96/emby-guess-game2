@@ -350,7 +350,8 @@ export class GameRoom {
     });
 
     if (!mediaResponse.ok) {
-      throw new Error(`Failed to get media playlist: ${mediaResponse.status}`);
+      const body = await mediaResponse.text();
+      throw new Error(`Failed to get media playlist: ${mediaResponse.status} - URL: ${mediaPlaylistUrl} - Body: ${body.substring(0, 300)}`);
     }
 
     const mediaPlaylist = await mediaResponse.text();
@@ -366,6 +367,10 @@ export class GameRoom {
       }
     }
 
+    console.log('Master playlist URL:', masterPlaylistUrl);
+    console.log('Media playlist URL:', mediaPlaylistUrl);
+    console.log('Segment URLs:', segmentUrls);
+
     // Download and store segments
     const clipBasePath = `clips/${this.roomCode}/${roundNumber}`;
     const segmentNames: string[] = [];
@@ -376,7 +381,8 @@ export class GameRoom {
       });
 
       if (!segmentResponse.ok) {
-        throw new Error(`Failed to download segment ${i}: ${segmentResponse.status}`);
+        const body = await segmentResponse.text();
+        throw new Error(`Failed to download segment ${i}: ${segmentResponse.status} - URL: ${segmentUrls[i]} - Body: ${body.substring(0, 200)}`);
       }
 
       const segmentName = `segment_${i}.ts`;
