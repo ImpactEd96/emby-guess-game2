@@ -34,4 +34,3 @@ EMBY_USER_ID = "9e7b29a7d9cb4920996f93ea911e9ac3"
 # Increase subrequest limit for clip staging (fetching Emby segments)
 [limits]
 max_subrequests = 1000
-cpu_ms = 30000
