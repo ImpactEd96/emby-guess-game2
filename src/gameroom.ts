@@ -208,6 +208,7 @@ export class GameRoom {
 
     this.roundInProgress = true;
     this.currentRound++;
+    console.log(`Starting round ${this.currentRound}...`);
 
     // Fetch next movie from queue or refill
     if (this.movieQueue.length === 0) {
@@ -216,10 +217,13 @@ export class GameRoom {
 
     const movie = this.movieQueue.shift();
     if (!movie) {
+      console.error('No movies available');
       this.sendToAll({ type: 'error', message: 'No movies available' });
       this.roundInProgress = false;
       return;
     }
+
+    console.log(`Round ${this.currentRound}: ${movie.name} (${movie.id})`);
 
     const clipPath = `clips/${this.roomCode}/${this.currentRound}`;
 
@@ -311,9 +315,10 @@ export class GameRoom {
     const duration = parseInt(this.env.CLIP_DURATION_SECONDS || '3');
 
     // Get media source ID
+    console.log(`Fetching media source for ${movieId}...`);
     const itemResponse = await fetch(
       `${this.env.EMBY_URL}/Users/${this.env.EMBY_USER_ID}/Items/${movieId}?Fields=MediaSources`,
-      { headers: { 'X-Emby-Token': this.env.EMBY_API_KEY } }
+      { headers: { 'X-Emby-Token': this.env.EMBY_API_KEY }, signal: AbortSignal.timeout(15000) }
     );
     const itemData = await itemResponse.json() as { MediaSources?: Array<{ Id: string }> };
     const mediaSourceId = itemData.MediaSources?.[0]?.Id;
@@ -409,15 +414,17 @@ ${segmentNames.map((name) => `#EXTINF:${duration},\n${name}`).join('\n')}
   }
 
   private async fetchMovies(): Promise<void> {
-    // Fetch movies from Emby API
+    console.log('Fetching movies from Emby...');
     const response = await fetch(
       `${this.env.EMBY_URL}/Users/${this.env.EMBY_USER_ID}/Items?IncludeItemTypes=Movie&Recursive=true&Fields=Id,Name&Limit=50`,
       {
         headers: {
           'X-Emby-Token': this.env.EMBY_API_KEY,
         },
+        signal: AbortSignal.timeout(15000),
       }
     );
+    console.log('Movies response:', response.status);
 
     if (response.ok) {
       const data = await response.json() as { Items?: Array<{ Id: string; Name: string }> };
@@ -425,6 +432,7 @@ ${segmentNames.map((name) => `#EXTINF:${duration},\n${name}`).join('\n')}
         id: item.Id,
         name: item.Name,
       }));
+      console.log(`Got ${this.movieQueue.length} movies`);
       // Shuffle the queue
       for (let i = this.movieQueue.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
