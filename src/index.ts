@@ -201,14 +201,56 @@ export default {
           headers: { 'X-Emby-Token': env.EMBY_API_KEY },
         });
 
-        const responseText = await response.text();
+        const masterPlaylist = await response.text();
+
+        // Parse media playlist URL
+        const mLines = masterPlaylist.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+        const playlistLine = mLines.find(l => l.includes('.m3u8'));
+
+        if (!playlistLine) {
+          return new Response(
+            JSON.stringify({ error: 'No media playlist in master', masterPlaylist }),
+            { headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+          );
+        }
+
+        const mediaPlaylistUrl = new URL(playlistLine, apiUrl).toString();
+
+        // Fetch media playlist
+        const mediaResponse = await fetch(mediaPlaylistUrl, {
+          headers: { 'X-Emby-Token': env.EMBY_API_KEY },
+        });
+
+        if (!mediaResponse.ok) {
+          const body = await mediaResponse.text();
+          return new Response(
+            JSON.stringify({ error: `Media playlist ${mediaResponse.status}`, url: mediaPlaylistUrl, body: body.substring(0, 500) }),
+            { headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+          );
+        }
+
+        const mediaPlaylist = await mediaResponse.text();
+
+        // Parse first segment URL
+        const segLines = mediaPlaylist.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+        const segmentUrl = segLines[0] ? new URL(segLines[0], mediaPlaylistUrl).toString() : null;
+
+        // Try downloading first segment
+        let segmentResult = 'skipped';
+        if (segmentUrl) {
+          const segResponse = await fetch(segmentUrl, {
+            headers: { 'X-Emby-Token': env.EMBY_API_KEY },
+          });
+          segmentResult = segResponse.ok ? `OK (${segResponse.headers.get('Content-Type')})` : `${segResponse.status} - ${await segResponse.text().then(t => t.substring(0, 200))}`;
+        }
 
         return new Response(
           JSON.stringify({
-            status: response.status,
-            mediaSourceId,
-            url: apiUrl,
-            playlist: responseText,
+            masterPlaylistUrl: apiUrl,
+            mediaPlaylistUrl,
+            segmentUrl,
+            segmentResult,
+            mediaPlaylistPreview: mediaPlaylist.substring(0, 500),
           }),
           { headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
         );
