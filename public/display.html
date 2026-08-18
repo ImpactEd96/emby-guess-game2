@@ -233,7 +233,7 @@
 
         function endRound(winner, movieName) {
             clearCountdown();
-            if (hls) hls.pause();
+            video.pause();
             statusOverlay.style.display = 'none';
             timerFill.style.width = '0%';
             revealBox.style.display = 'block';

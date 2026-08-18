@@ -338,28 +338,22 @@ export class GameRoom {
   private async stageClip(movieId: string, roundNumber: number): Promise<void> {
     const duration = parseInt(this.env.CLIP_DURATION_SECONDS || '3');
 
-    // Get media source ID + runtime
+    // Get media source ID
     console.log(`Fetching media source for ${movieId}...`);
     const itemResponse = await fetch(
-      `${this.env.EMBY_URL}/Users/${this.env.EMBY_USER_ID}/Items/${movieId}?Fields=MediaSources,RunTimeTicks`,
+      `${this.env.EMBY_URL}/Users/${this.env.EMBY_USER_ID}/Items/${movieId}?Fields=MediaSources`,
       { headers: { 'X-Emby-Token': this.env.EMBY_API_KEY }, signal: AbortSignal.timeout(15000) }
     );
-    const itemData = await itemResponse.json() as { MediaSources?: Array<{ Id: string }>; RunTimeTicks?: number };
+    const itemData = await itemResponse.json() as { MediaSources?: Array<{ Id: string }> };
     const mediaSourceId = itemData.MediaSources?.[0]?.Id;
 
     if (!mediaSourceId) {
       throw new Error('No media source found for movie');
     }
 
-    // Pick a random start time (skip first 10s and last 10s)
-    const totalSeconds = Math.floor((itemData.RunTimeTicks || 72000000000) / 10000000);
-    const maxStart = Math.max(totalSeconds - duration - 10, 10);
-    const startTime = Math.floor(Math.random() * (maxStart - 10)) + 10;
-    console.log(`Movie: ${totalSeconds}s, clip starts at ${startTime}s`);
-
     // Get HLS master playlist
     const playSessionId = crypto.randomUUID();
-    const masterPlaylistUrl = `${this.env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=${startTime}&PlaySessionId=${playSessionId}`;
+    const masterPlaylistUrl = `${this.env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0&PlaySessionId=${playSessionId}`;
     const masterResponse = await fetch(masterPlaylistUrl, {
       headers: { 'X-Emby-Token': this.env.EMBY_API_KEY },
     });
@@ -409,8 +403,11 @@ export class GameRoom {
 
     // Only download segments needed for clip duration
     const neededSegments = Math.ceil(duration / 6) + 1;
-    const segmentsToFetch = segmentUrls.slice(0, Math.max(neededSegments, 1));
-    console.log(`Downloading ${segmentsToFetch.length} segments (need ${duration}s clip)`);
+    // Pick a random offset into the segment list to get a random part of the movie
+    const maxOffset = Math.max(segmentUrls.length - neededSegments - 1, 0);
+    const offset = maxOffset > 0 ? Math.floor(Math.random() * maxOffset) : 0;
+    const segmentsToFetch = segmentUrls.slice(offset, offset + Math.max(neededSegments, 1));
+    console.log(`Downloading ${segmentsToFetch.length} segments from offset ${offset}/${segmentUrls.length} (need ${duration}s clip)`);
 
     // Download and store segments
     const clipBasePath = `clips/${this.roomCode}/${roundNumber}`;
