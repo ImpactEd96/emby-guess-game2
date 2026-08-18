@@ -201,10 +201,24 @@ export class GameRoom {
         player.score += 1;
       }
     }
+
+    this.sendToSocket(ws, {
+      type: 'guess_feedback',
+      correct,
+      guess: data.guess,
+    });
   }
 
   private async startNewRound(): Promise<void> {
     if (this.roundInProgress) return;
+
+    // Don't start round if no players connected
+    const connectedPlayers = Array.from(this.players.values()).filter(p => p.connected);
+    if (connectedPlayers.length === 0) {
+      this.gameStarted = false;
+      this.roundInProgress = false;
+      return;
+    }
 
     this.roundInProgress = true;
     this.currentRound++;
@@ -215,52 +229,58 @@ export class GameRoom {
       await this.fetchMovies();
     }
 
-    const movie = this.movieQueue.shift();
-    if (!movie) {
-      console.error('No movies available');
-      this.sendToAll({ type: 'error', message: 'No movies available' });
-      this.roundInProgress = false;
-      return;
+    // Try up to 5 movies if clip staging fails
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const movie = this.movieQueue.shift();
+      if (!movie) {
+        console.error('No movies available');
+        this.sendToAll({ type: 'error', message: 'No movies available' });
+        this.roundInProgress = false;
+        return;
+      }
+
+      console.log(`Round ${this.currentRound} attempt ${attempt + 1}: ${movie.name} (${movie.id})`);
+
+      const clipPath = `clips/${this.roomCode}/${this.currentRound}`;
+
+      const round: Round = {
+        number: this.currentRound,
+        movieId: movie.id,
+        movieName: movie.name,
+        clipPath,
+        status: 'staging',
+        guesses: [],
+      };
+
+      this.rounds.push(round);
+
+      try {
+        await this.stageClip(movie.id, this.currentRound);
+        round.status = 'playing';
+        round.guessWindowStart = Date.now();
+
+        this.sendToAll({
+          type: 'round_start',
+          round,
+          clipUrl: `/clip/${this.roomCode}/${this.currentRound}/playlist.m3u8`,
+          guessWindowDuration: GUESS_WINDOW_DURATION,
+          revealDuration: ROUND_TRANSITION_DELAY,
+        });
+
+        await this.scheduleAlarm(GUESS_WINDOW_DURATION);
+        return; // Success
+      } catch (err) {
+        console.error(`Failed to stage clip for round ${this.currentRound}:`, err);
+        lastError = err as Error;
+        // Remove the failed round
+        this.rounds.pop();
+      }
     }
 
-    console.log(`Round ${this.currentRound}: ${movie.name} (${movie.id})`);
-
-    const clipPath = `clips/${this.roomCode}/${this.currentRound}`;
-
-    const round: Round = {
-      number: this.currentRound,
-      movieId: movie.id,
-      movieName: movie.name,
-      clipPath,
-      status: 'staging',
-      guesses: [],
-    };
-
-    this.rounds.push(round);
-
-    // Stage the first clip synchronously before broadcasting
-    try {
-      await this.stageClip(movie.id, this.currentRound);
-    } catch (err) {
-      console.error(`Failed to stage clip for round ${this.currentRound}:`, err);
-      this.sendToAll({ type: 'error', message: `Failed to load clip: ${(err as Error).message}` });
-      this.roundInProgress = false;
-      return;
-    }
-
-    round.status = 'playing';
-    round.guessWindowStart = Date.now();
-
-    // Broadcast round start to all clients
-    const clipUrl = `/clip/${this.roomCode}/${this.currentRound}/playlist.m3u8`;
-    this.sendToAll({
-      type: 'round_start',
-      round,
-      clipUrl,
-    });
-
-    // Schedule end of round using Durable Object alarm
-    await this.scheduleAlarm(GUESS_WINDOW_DURATION);
+    // All attempts failed
+    this.sendToAll({ type: 'error', message: `Failed to load clip after 5 attempts: ${lastError?.message}` });
+    this.roundInProgress = false;
   }
 
   private async endRound(): Promise<void> {
@@ -296,40 +316,50 @@ export class GameRoom {
   }
 
   async alarm(): Promise<void> {
-    if (!this.alarmScheduled) return;
-
     this.alarmScheduled = false;
 
-    // Check if we're in a round that needs to end
     const currentRoundData = this.rounds[this.currentRound - 1];
-    if (currentRoundData && currentRoundData.status === 'playing') {
+    if (!currentRoundData) return;
+
+    if (currentRoundData.status === 'playing') {
       await this.endRound();
-    } else if (currentRoundData && currentRoundData.status === 'revealing') {
-      // Start next round
+    } else if (currentRoundData.status === 'revealing') {
       this.roundInProgress = false;
-      await this.startNewRound();
+      // Only start next round if players are connected
+      const connectedPlayers = Array.from(this.players.values()).filter(p => p.connected);
+      if (connectedPlayers.length > 0) {
+        await this.startNewRound();
+      } else {
+        this.gameStarted = false;
+      }
     }
   }
 
   private async stageClip(movieId: string, roundNumber: number): Promise<void> {
     const duration = parseInt(this.env.CLIP_DURATION_SECONDS || '3');
 
-    // Get media source ID
+    // Get media source ID + runtime
     console.log(`Fetching media source for ${movieId}...`);
     const itemResponse = await fetch(
-      `${this.env.EMBY_URL}/Users/${this.env.EMBY_USER_ID}/Items/${movieId}?Fields=MediaSources`,
+      `${this.env.EMBY_URL}/Users/${this.env.EMBY_USER_ID}/Items/${movieId}?Fields=MediaSources,RunTimeTicks`,
       { headers: { 'X-Emby-Token': this.env.EMBY_API_KEY }, signal: AbortSignal.timeout(15000) }
     );
-    const itemData = await itemResponse.json() as { MediaSources?: Array<{ Id: string }> };
+    const itemData = await itemResponse.json() as { MediaSources?: Array<{ Id: string }>; RunTimeTicks?: number };
     const mediaSourceId = itemData.MediaSources?.[0]?.Id;
 
     if (!mediaSourceId) {
       throw new Error('No media source found for movie');
     }
 
+    // Pick a random start time (skip first 10s and last 10s)
+    const totalSeconds = Math.floor((itemData.RunTimeTicks || 72000000000) / 10000000);
+    const maxStart = Math.max(totalSeconds - duration - 10, 10);
+    const startTime = Math.floor(Math.random() * (maxStart - 10)) + 10;
+    console.log(`Movie: ${totalSeconds}s, clip starts at ${startTime}s`);
+
     // Get HLS master playlist
     const playSessionId = crypto.randomUUID();
-    const masterPlaylistUrl = `${this.env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0&PlaySessionId=${playSessionId}`;
+    const masterPlaylistUrl = `${this.env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=${startTime}&PlaySessionId=${playSessionId}`;
     const masterResponse = await fetch(masterPlaylistUrl, {
       headers: { 'X-Emby-Token': this.env.EMBY_API_KEY },
     });

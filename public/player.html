@@ -2,436 +2,290 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Emby Guess Game - Player</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.0/dist/hls.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
             color: white;
             min-height: 100vh;
-            padding: 20px;
+            display: flex;
+            flex-direction: column;
         }
-
-        .container {
-            max-width: 500px;
-            margin: 0 auto;
-        }
-
         .header {
+            padding: 12px 20px;
+            background: rgba(0,0,0,0.8);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
         }
-
-        .player-name {
-            font-size: 1.2rem;
-            color: #e94560;
-        }
-
-        .score {
-            font-size: 1.5rem;
+        .room-code { font-size: 0.9rem; color: #888; }
+        .score-badge {
+            background: #e94560;
+            padding: 4px 12px;
+            border-radius: 12px;
             font-weight: bold;
-            color: #ff6b6b;
+            font-size: 0.9rem;
         }
-
-        .video-container {
+        .video-section {
+            position: relative;
+            background: #000;
             width: 100%;
             aspect-ratio: 16/9;
-            background: #000;
-            border-radius: 10px;
-            overflow: hidden;
-            margin-bottom: 20px;
-            position: relative;
+            max-height: 35vh;
         }
-
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-        }
-
-        .timer-overlay {
+        video { width: 100%; height: 100%; object-fit: contain; }
+        .video-overlay {
             position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 5px 15px;
+            bottom: 10px; left: 10px; right: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        .timer-pill {
+            background: rgba(0,0,0,0.7);
+            padding: 6px 14px;
             border-radius: 20px;
-            font-size: 1.5rem;
+            font-size: 1.4rem;
             font-weight: bold;
-            color: #ff6b6b;
         }
-
-        .timer-overlay.urgent {
-            color: #ff0000;
-            animation: pulse 0.5s infinite;
+        .timer-pill.guessing { color: #ff6b6b; }
+        .timer-pill.urgent { color: #ff0000; animation: pulse 0.5s infinite; }
+        .timer-pill.revealing { color: #4CAF50; }
+        .round-pill {
+            background: rgba(0,0,0,0.7);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: #aaa;
         }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .guess-section { flex: 1; padding: 15px 20px; display: flex; flex-direction: column; }
+        .status-bar {
+            text-align: center;
+            padding: 12px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1.1rem;
         }
-
-        .guess-section {
-            margin-bottom: 20px;
-        }
-
-        .guess-input {
-            width: 100%;
-            padding: 15px 20px;
+        .status-bar.waiting { background: rgba(136,136,136,0.15); color: #888; }
+        .status-bar.listening { background: rgba(233,69,96,0.15); color: #e94560; }
+        .status-bar.submitted { background: rgba(76,175,80,0.15); color: #4CAF50; }
+        .status-bar.result { background: rgba(76,175,80,0.2); color: #4CAF50; font-size: 1.3rem; }
+        .input-area { display: flex; gap: 10px; }
+        #guessInput {
+            flex: 1;
+            padding: 14px 18px;
             font-size: 1.1rem;
             border: 2px solid #333;
             border-radius: 10px;
-            background: rgba(255, 255, 255, 0.1);
+            background: #1a1a1a;
             color: white;
             outline: none;
-            transition: border-color 0.3s;
+            transition: border-color 0.2s;
         }
-
-        .guess-input:focus {
-            border-color: #e94560;
-        }
-
-        .guess-input::placeholder {
-            color: #666;
-        }
-
-        .guess-input:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .submit-btn {
-            width: 100%;
-            padding: 15px;
+        #guessInput:focus { border-color: #e94560; }
+        #guessInput:disabled { opacity: 0.4; }
+        #submitBtn {
+            padding: 14px 24px;
             font-size: 1.1rem;
-            font-weight: 600;
+            background: #e94560;
+            color: white;
             border: none;
             border-radius: 10px;
-            background: linear-gradient(90deg, #e94560, #ff6b6b);
-            color: white;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            margin-top: 10px;
-        }
-
-        .submit-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(233, 69, 96, 0.3);
-        }
-
-        .submit-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        .result-section {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            padding: 20px;
-            text-align: center;
-            margin-bottom: 20px;
-            display: none;
-        }
-
-        .result-section.show {
-            display: block;
-        }
-
-        .result-section.correct {
-            background: rgba(76, 175, 80, 0.2);
-            border: 1px solid #4CAF50;
-        }
-
-        .result-section.incorrect {
-            background: rgba(244, 67, 54, 0.2);
-            border: 1px solid #F44336;
-        }
-
-        .result-section.winner {
-            background: rgba(255, 193, 7, 0.2);
-            border: 1px solid #FFC107;
-        }
-
-        .result-text {
-            font-size: 1.3rem;
-            margin-bottom: 10px;
-        }
-
-        .correct-answer {
-            font-size: 1.5rem;
-            color: #e94560;
             font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
         }
-
+        #submitBtn:active { transform: scale(0.95); }
+        #submitBtn:disabled { background: #444; cursor: default; }
         .scoreboard {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            padding: 20px;
+            background: rgba(255,255,255,0.03);
+            border-top: 1px solid #222;
+            padding: 10px 20px;
         }
-
-        .scoreboard h2 {
-            margin-bottom: 15px;
-            color: #e94560;
-            font-size: 1.3rem;
-        }
-
-        .player-row {
+        .scoreboard h3 { font-size: 0.8rem; color: #666; text-transform: uppercase; margin-bottom: 6px; }
+        .score-row {
             display: flex;
             justify-content: space-between;
-            padding: 10px;
-            margin-bottom: 8px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 5px;
+            padding: 4px 0;
+            font-size: 0.95rem;
         }
-
-        .player-row.current {
-            background: rgba(233, 69, 96, 0.2);
-            border: 1px solid #e94560;
-        }
-
-        .player-row .name {
-            font-weight: bold;
-        }
-
-        .player-row .points {
-            color: #ff6b6b;
-            font-weight: bold;
-        }
-
-        .waiting {
-            text-align: center;
-            color: #888;
-            padding: 40px;
-        }
+        .score-row .name { color: #ccc; }
+        .score-row .pts { color: #ff6b6b; font-weight: bold; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="player-name" id="playerName">Player</div>
-            <div class="score">Score: <span id="score">0</span></div>
-        </div>
-        
-        <div class="video-container">
-            <video id="video" autoplay muted></video>
-            <div class="timer-overlay" id="timer">--</div>
-        </div>
-        
-        <div class="guess-section">
-            <input type="text" class="guess-input" id="guessInput" placeholder="Enter movie name..." disabled>
-            <button class="submit-btn" id="submitBtn" disabled>Submit Guess</button>
-        </div>
-        
-        <div class="result-section" id="resultSection">
-            <div class="result-text" id="resultText">---</div>
-            <div class="correct-answer" id="correctAnswer">---</div>
-        </div>
-        
-        <div class="scoreboard">
-            <h2>🏆 Scoreboard</h2>
-            <div id="scoreboardList">
-                <div class="waiting">Waiting for game to start...</div>
-            </div>
+    <div class="header">
+        <div class="room-code">Room: <span id="roomCode">---</span></div>
+        <div class="score-badge">Score: <span id="myScore">0</span></div>
+    </div>
+    <div class="video-section">
+        <video id="video" muted playsinline></video>
+        <div class="video-overlay">
+            <div class="round-pill">Round <span id="roundNum">0</span></div>
+            <div class="timer-pill" id="timerPill" style="display:none">--</div>
         </div>
     </div>
-
+    <div class="guess-section">
+        <div class="status-bar waiting" id="statusBar">Joining game...</div>
+        <div class="input-area">
+            <input type="text" id="guessInput" placeholder="Type movie name..." disabled autocomplete="off">
+            <button id="submitBtn" disabled>Guess</button>
+        </div>
+    </div>
+    <div class="scoreboard">
+        <h3>Scores</h3>
+        <div id="scoreList"></div>
+    </div>
     <script>
         const video = document.getElementById('video');
-        const playerNameEl = document.getElementById('playerName');
-        const scoreEl = document.getElementById('score');
-        const timerEl = document.getElementById('timer');
         const guessInput = document.getElementById('guessInput');
         const submitBtn = document.getElementById('submitBtn');
-        const resultSection = document.getElementById('resultSection');
-        const resultText = document.getElementById('resultText');
-        const correctAnswer = document.getElementById('correctAnswer');
-        const scoreboardList = document.getElementById('scoreboardList');
+        const statusBar = document.getElementById('statusBar');
+        const timerPill = document.getElementById('timerPill');
+        const roundNumEl = document.getElementById('roundNum');
+        const roomCodeEl = document.getElementById('roomCode');
+        const myScoreEl = document.getElementById('myScore');
+        const scoreList = document.getElementById('scoreList');
 
-        let hls = null;
-        let ws = null;
-        let playerName = localStorage.getItem('playerName');
-        let hasGuessed = false;
+        let hls = null, ws = null, currentRound = null;
+        let myScore = 0, myId = null;
+        let countdownInterval = null;
 
-        // Redirect if no name
-        if (!playerName) {
-            window.location.href = '/';
+        function setStatus(text, type) {
+            statusBar.textContent = text;
+            statusBar.className = 'status-bar ' + type;
         }
 
-        playerNameEl.textContent = playerName;
-
-        // Connect to WebSocket
         function connect() {
+            let name = localStorage.getItem('playerName');
+            if (!name) {
+                name = prompt('Enter your name to join:');
+                if (!name) { setTimeout(connect, 1000); return; }
+                localStorage.setItem('playerName', name);
+            }
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            console.log('Connecting to WebSocket...');
             ws = new WebSocket(`${protocol}//${window.location.host}/ws?room=default`);
-            
             ws.onopen = () => {
-                console.log('WebSocket connected, sending join...');
-                ws.send(JSON.stringify({ type: 'join', role: 'player', name: playerName }));
+                ws.send(JSON.stringify({ type: 'join', role: 'player', name }));
+                setStatus('Connected! Waiting for round...', 'waiting');
             };
-            
             ws.onmessage = (event) => {
-                console.log('WS message:', event.data);
-                try {
-                    const data = JSON.parse(event.data);
-                    handleMessage(data);
-                } catch (e) {
-                    console.error('Failed to parse message:', event.data);
-                }
+                try { handleMessage(JSON.parse(event.data)); }
+                catch (e) { console.error('Parse error:', e); }
             };
-            
             ws.onclose = () => {
-                console.log('WebSocket closed, reconnecting...');
+                setStatus('Disconnected. Reconnecting...', 'waiting');
                 setTimeout(connect, 3000);
-            };
-
-            ws.onerror = (err) => {
-                console.error('WebSocket error:', err);
             };
         }
 
         function handleMessage(data) {
             switch (data.type) {
                 case 'round_start':
-                    startRound(data.round, data.clipUrl);
+                    clearCountdown();
+                    currentRound = data.round;
+                    roundNumEl.textContent = data.round.number;
+                    guessInput.value = '';
+                    guessInput.disabled = false;
+                    submitBtn.disabled = false;
+                    setStatus('Guess the movie!', 'listening');
+                    timerPill.style.display = 'block';
+
+                    if (data.clipUrl) loadVideo(data.clipUrl);
+
+                    // Local countdown
+                    const guessMs = data.guessWindowDuration || 20000;
+                    let remaining = Math.ceil(guessMs / 1000);
+                    timerPill.textContent = remaining + 's';
+                    timerPill.className = 'timer-pill guessing';
+
+                    countdownInterval = setInterval(() => {
+                        remaining--;
+                        timerPill.textContent = remaining + 's';
+                        if (remaining <= 5) timerPill.className = 'timer-pill urgent';
+                        if (remaining <= 0) {
+                            clearCountdown();
+                            guessInput.disabled = true;
+                            submitBtn.disabled = true;
+                            setStatus("Time's up!", 'waiting');
+                            timerPill.style.display = 'none';
+                        }
+                    }, 1000);
+                    break;
+                case 'guess_feedback':
+                    if (data.correct) {
+                        clearCountdown();
+                        setStatus('Correct!', 'result');
+                        guessInput.disabled = true;
+                        submitBtn.disabled = true;
+                        timerPill.style.display = 'none';
+                    } else {
+                        setStatus('Wrong! Try again...', 'listening');
+                    }
                     break;
                 case 'round_end':
-                    endRound(data.winner, data.correctAnswer);
+                    clearCountdown();
+                    setStatus(`Answer: ${data.correctAnswer}`, 'result');
+                    guessInput.disabled = true;
+                    submitBtn.disabled = true;
+                    timerPill.style.display = 'none';
                     break;
                 case 'scoreboard':
                     updateScoreboard(data.players);
                     break;
-                case 'timer':
-                    updateTimer(data.secondsLeft);
-                    break;
                 case 'error':
-                    console.error('Error:', data.message);
+                    setStatus(data.message, 'waiting');
                     break;
             }
         }
 
-        function startRound(round, clipUrl) {
-            hasGuessed = false;
-            resultSection.classList.remove('show', 'correct', 'incorrect', 'winner');
-            
-            guessInput.disabled = false;
-            submitBtn.disabled = false;
-            guessInput.value = '';
-            guessInput.focus();
-            
-            // Load video
-            if (clipUrl) {
-                loadVideo(clipUrl);
-            }
+        function clearCountdown() {
+            if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
         }
 
         function loadVideo(url) {
-            console.log('Loading video:', url);
-            if (hls) {
-                hls.destroy();
-            }
-            
+            if (hls) hls.destroy();
             if (Hls.isSupported()) {
-                hls = new Hls({
-                    enableWorker: true,
-                    lowLatencyMode: true,
-                });
+                hls = new Hls({ enableWorker: true, lowLatencyMode: true });
                 hls.loadSource(url);
                 hls.attachMedia(video);
-                hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                    video.play();
-                });
+                hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                 video.src = url;
-                video.play();
+                video.play().catch(() => {});
             }
         }
 
-        function endRound(winner, movieName) {
-            guessInput.disabled = true;
-            submitBtn.disabled = true;
-            
-            if (hls) {
-                hls.pause();
-            }
-            
-            resultSection.classList.add('show');
-            correctAnswer.textContent = movieName;
-            
-            if (winner === playerName) {
-                resultText.textContent = '🎉 You won this round!';
-                resultSection.classList.add('winner');
-            } else if (hasGuessed) {
-                resultText.textContent = '❌ Wrong answer';
-                resultSection.classList.add('incorrect');
-            } else {
-                resultText.textContent = '⏰ Time ran out';
-                resultSection.classList.add('incorrect');
-            }
-        }
-
-        function updateTimer(secondsLeft) {
-            timerEl.textContent = secondsLeft;
-            
-            if (secondsLeft <= 5) {
-                timerEl.classList.add('urgent');
-            } else {
-                timerEl.classList.remove('urgent');
-            }
-        }
-
-        function updateScoreboard(players) {
-            scoreboardList.innerHTML = '';
-            
-            // Sort by score descending
-            const sorted = [...players].sort((a, b) => b.score - a.score);
-            
-            sorted.forEach((player, index) => {
-                const div = document.createElement('div');
-                div.className = 'player-row';
-                if (player.name === playerName) {
-                    div.classList.add('current');
-                    scoreEl.textContent = player.score;
-                }
-                div.innerHTML = `
-                    <span class="name">${player.name}</span>
-                    <span class="points">${player.score} pts</span>
-                `;
-                scoreboardList.appendChild(div);
-            });
-        }
-
-        // Submit guess
         function submitGuess() {
             const guess = guessInput.value.trim();
-            if (!guess || hasGuessed) return;
-            
-            hasGuessed = true;
-            guessInput.disabled = true;
-            submitBtn.disabled = true;
-            
+            if (!guess || !ws || ws.readyState !== WebSocket.OPEN) return;
             ws.send(JSON.stringify({ type: 'guess', guess }));
+            guessInput.value = '';
+            setStatus('Guess sent!', 'submitted');
         }
 
         submitBtn.addEventListener('click', submitGuess);
-        guessInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                submitGuess();
-            }
-        });
+        guessInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitGuess(); });
 
+        function updateScoreboard(players) {
+            scoreList.innerHTML = '';
+            [...players].sort((a, b) => b.score - a.score).forEach(p => {
+                const row = document.createElement('div');
+                row.className = 'score-row';
+                row.innerHTML = `<span class="name">${p.name}</span><span class="pts">${p.score}</span>`;
+                scoreList.appendChild(row);
+            });
+            const me = players.find(p => p.name === localStorage.getItem('playerName'));
+            if (me) myScoreEl.textContent = me.score;
+        }
+
+        fetch('/api/code?room=default').then(r => r.json()).then(d => roomCodeEl.textContent = d.code);
         connect();
     </script>
 </body>

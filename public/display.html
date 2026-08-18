@@ -6,325 +6,252 @@
     <title>Emby Guess Game - Display</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.0/dist/hls.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #0a0a0a;
             color: white;
             min-height: 100vh;
             overflow: hidden;
         }
-
-        .container {
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-        }
-
+        .container { display: flex; flex-direction: column; height: 100vh; }
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 20px 40px;
-            background: rgba(0, 0, 0, 0.5);
+            padding: 15px 30px;
+            background: rgba(0,0,0,0.7);
+            z-index: 10;
         }
-
-        .room-code {
+        .room-code { font-size: 1.3rem; font-weight: bold; color: #e94560; }
+        .round-badge {
+            background: rgba(233,69,96,0.2);
+            border: 1px solid #e94560;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 1rem;
+        }
+        .main { flex: 1; display: flex; position: relative; }
+        .video-area { flex: 1; position: relative; background: #000; display: flex; align-items: center; justify-content: center; }
+        video { width: 100%; height: 100%; object-fit: contain; }
+        .timer-bar {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+        }
+        .timer-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #e94560, #ff6b6b);
+            transition: width 1s linear;
+        }
+        .timer-fill.urgent { background: linear-gradient(90deg, #ff0000, #ff4444); }
+        .timer-fill.reveal { background: linear-gradient(90deg, #4CAF50, #66bb6a); }
+        .status-overlay {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: none;
+        }
+        .timer-display {
+            font-size: 6rem;
+            font-weight: bold;
+            text-shadow: 0 0 30px rgba(0,0,0,0.8);
+            line-height: 1;
+        }
+        .timer-display.guessing { color: #ff6b6b; }
+        .timer-display.revealing { color: #4CAF50; }
+        .status-label {
             font-size: 1.5rem;
-            font-weight: bold;
-            color: #e94560;
+            margin-top: 10px;
+            text-shadow: 0 0 20px rgba(0,0,0,0.8);
+            opacity: 0.8;
         }
-
-        .timer {
-            font-size: 3rem;
-            font-weight: bold;
-            color: #ff6b6b;
-        }
-
-        .main-content {
-            flex: 1;
-            display: flex;
-            position: relative;
-        }
-
-        .video-container {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #000;
-        }
-
-        video {
-            max-width: 100%;
-            max-height: 100%;
-        }
-
-        .scoreboard {
-            width: 300px;
-            background: rgba(0, 0, 0, 0.8);
+        .sidebar {
+            width: 280px;
+            background: rgba(0,0,0,0.85);
             padding: 20px;
-            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
         }
-
-        .scoreboard h2 {
-            margin-bottom: 20px;
+        .sidebar h2 {
             color: #e94560;
-            font-size: 1.5rem;
+            font-size: 1.2rem;
+            margin-bottom: 15px;
         }
-
-        .player-score {
+        .score-list { flex: 1; overflow-y: auto; }
+        .score-row {
             display: flex;
             justify-content: space-between;
             padding: 10px;
-            margin-bottom: 10px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 5px;
+            margin-bottom: 6px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 6px;
         }
-
-        .player-score.winner {
-            background: rgba(233, 69, 96, 0.3);
-            border: 1px solid #e94560;
+        .score-row .name { font-weight: bold; }
+        .score-row .pts { color: #ff6b6b; font-weight: bold; }
+        .reveal-box {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(76,175,80,0.15);
+            border: 1px solid #4CAF50;
+            border-radius: 8px;
+            text-align: center;
         }
-
-        .player-name {
-            font-weight: bold;
-        }
-
-        .player-points {
-            color: #ff6b6b;
-            font-weight: bold;
-        }
-
-        .overlay {
+        .movie-title { font-size: 1.8rem; font-weight: bold; color: #e94560; margin-bottom: 10px; }
+        .winner-text { font-size: 1.3rem; color: #4CAF50; }
+        .waiting {
             position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.9);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
         }
-
-        .overlay.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        .movie-title {
-            font-size: 3rem;
-            margin-bottom: 20px;
-            color: #e94560;
-        }
-
-        .winner-announcement {
-            font-size: 2rem;
-            color: #ff6b6b;
-        }
-
-        .waiting-message {
-            font-size: 1.5rem;
-            color: #888;
-        }
-
-        .round-info {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            font-size: 1.2rem;
-            color: #888;
-        }
+        .waiting h2 { font-size: 2rem; color: #888; margin-bottom: 10px; }
+        .waiting p { color: #555; font-size: 1.2rem; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <div class="room-code">Room: <span id="roomCode">---</span></div>
-            <div class="timer" id="timer">--</div>
+            <div class="round-badge">Round <span id="roundNumber">0</span></div>
         </div>
-        
-        <div class="main-content">
-            <div class="video-container">
+        <div class="main">
+            <div class="video-area">
                 <video id="video" autoplay muted></video>
-                
-                <div class="overlay" id="revealOverlay">
-                    <div class="movie-title" id="movieTitle">---</div>
-                    <div class="winner-announcement" id="winnerAnnouncement">---</div>
+                <div class="timer-bar"><div class="timer-fill" id="timerFill"></div></div>
+                <div class="status-overlay" id="statusOverlay" style="display:none">
+                    <div class="timer-display" id="timerDisplay">--</div>
+                    <div class="status-label" id="statusLabel"></div>
                 </div>
-                
-                <div class="overlay active" id="waitingOverlay">
-                    <div class="waiting-message">Waiting for players...</div>
+                <div class="waiting" id="waitingScreen">
+                    <h2>Waiting for players...</h2>
+                    <p>Join on your phone to start</p>
                 </div>
             </div>
-            
-            <div class="scoreboard">
-                <h2>🏆 Scoreboard</h2>
-                <div id="scoreboardList"></div>
+            <div class="sidebar">
+                <h2>Scoreboard</h2>
+                <div class="score-list" id="scoreList"></div>
+                <div class="reveal-box" id="revealBox">
+                    <div class="movie-title" id="movieTitle"></div>
+                    <div class="winner-text" id="winnerText"></div>
+                </div>
             </div>
         </div>
-        
-        <div class="round-info">Round <span id="roundNumber">0</span></div>
     </div>
-
     <script>
         const video = document.getElementById('video');
         const roomCodeEl = document.getElementById('roomCode');
-        const timerEl = document.getElementById('timer');
-        const revealOverlay = document.getElementById('revealOverlay');
-        const waitingOverlay = document.getElementById('waitingOverlay');
-        const movieTitleEl = document.getElementById('movieTitle');
-        const winnerAnnouncementEl = document.getElementById('winnerAnnouncement');
-        const scoreboardList = document.getElementById('scoreboardList');
         const roundNumberEl = document.getElementById('roundNumber');
+        const timerFill = document.getElementById('timerFill');
+        const statusOverlay = document.getElementById('statusOverlay');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const statusLabel = document.getElementById('statusLabel');
+        const waitingScreen = document.getElementById('waitingScreen');
+        const scoreList = document.getElementById('scoreList');
+        const revealBox = document.getElementById('revealBox');
+        const movieTitleEl = document.getElementById('movieTitle');
+        const winnerTextEl = document.getElementById('winnerText');
 
-        let hls = null;
-        let ws = null;
-        let currentRound = 0;
+        let hls = null, ws = null;
+        let countdownInterval = null;
 
-        // Connect to WebSocket
         function connect() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            console.log('Connecting to WebSocket...');
             ws = new WebSocket(`${protocol}//${window.location.host}/ws?room=default`);
-            
-            ws.onopen = () => {
-                console.log('WebSocket connected, sending join...');
-                ws.send(JSON.stringify({ type: 'join', role: 'display' }));
-            };
-            
+            ws.onopen = () => ws.send(JSON.stringify({ type: 'join', role: 'display' }));
             ws.onmessage = (event) => {
-                console.log('WS message:', event.data);
-                try {
-                    const data = JSON.parse(event.data);
-                    handleMessage(data);
-                } catch (e) {
-                    console.error('Failed to parse message:', event.data);
-                }
+                try { handleMessage(JSON.parse(event.data)); }
+                catch (e) { console.error('Parse error:', e); }
             };
-            
-            ws.onclose = () => {
-                console.log('WebSocket closed, reconnecting...');
-                setTimeout(connect, 3000);
-            };
-
-            ws.onerror = (err) => {
-                console.error('WebSocket error:', err);
-            };
+            ws.onclose = () => setTimeout(connect, 3000);
         }
 
         function handleMessage(data) {
             switch (data.type) {
-                case 'round_start':
-                    startRound(data.round, data.clipUrl);
-                    break;
-                case 'round_end':
-                    endRound(data.winner, data.correctAnswer);
-                    break;
-                case 'scoreboard':
-                    updateScoreboard(data.players);
-                    break;
-                case 'timer':
-                    updateTimer(data.secondsLeft);
-                    break;
-                case 'error':
-                    console.error('Error:', data.message);
-                    break;
+                case 'round_start': startRound(data.round, data.clipUrl, data.guessWindowDuration, data.revealDuration); break;
+                case 'round_end': endRound(data.winner, data.correctAnswer); break;
+                case 'scoreboard': updateScoreboard(data.players); break;
+                case 'error': console.error('Error:', data.message); break;
             }
         }
 
-        function startRound(round, clipUrl) {
-            currentRound = round.number;
-            roundNumberEl.textContent = currentRound;
-            
-            waitingOverlay.classList.remove('active');
-            revealOverlay.classList.remove('active');
-            
-            // Load video
-            if (clipUrl) {
-                loadVideo(clipUrl);
-            }
+        function startRound(round, clipUrl, guessWindowDuration, revealDuration) {
+            if (!round || !round.number) return; // skip empty join round
+
+            clearCountdown();
+            waitingScreen.style.display = 'none';
+            revealBox.style.display = 'none';
+            roundNumberEl.textContent = round.number;
+
+            if (clipUrl) loadVideo(clipUrl);
+
+            // Start local countdown for guess window
+            const guessMs = guessWindowDuration || 20000;
+            let remaining = Math.ceil(guessMs / 1000);
+
+            statusOverlay.style.display = 'block';
+            timerDisplay.textContent = remaining;
+            timerDisplay.className = 'timer-display guessing';
+            statusLabel.textContent = 'Guess the movie!';
+            timerFill.style.width = '100%';
+            timerFill.className = 'timer-fill';
+
+            countdownInterval = setInterval(() => {
+                remaining--;
+                timerDisplay.textContent = remaining;
+                timerFill.style.width = ((remaining / (guessMs / 1000)) * 100) + '%';
+                if (remaining <= 5) timerDisplay.classList.add('urgent');
+                if (remaining <= 0) {
+                    clearCountdown();
+                    timerDisplay.textContent = 'Time!';
+                    statusLabel.textContent = 'No correct guess';
+                    timerFill.className = 'timer-fill reveal';
+                    timerFill.style.width = '0%';
+                }
+            }, 1000);
+        }
+
+        function clearCountdown() {
+            if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
         }
 
         function loadVideo(url) {
-            console.log('Loading video:', url);
-            if (hls) {
-                hls.destroy();
-            }
-            
+            if (hls) hls.destroy();
             if (Hls.isSupported()) {
-                hls = new Hls({
-                    enableWorker: true,
-                    lowLatencyMode: true,
-                });
+                hls = new Hls({ enableWorker: true, lowLatencyMode: true });
                 hls.loadSource(url);
                 hls.attachMedia(video);
-                hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                    video.play();
-                });
+                hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                 video.src = url;
-                video.play();
+                video.play().catch(() => {});
             }
         }
 
-        function endRound(winner, correctAnswer) {
-            if (hls) {
-                hls.pause();
-            }
-            
-            movieTitleEl.textContent = correctAnswer;
-            winnerAnnouncementEl.textContent = winner ? `${winner} wins!` : 'No winner!';
-            revealOverlay.classList.add('active');
-        }
-
-        function updateTimer(secondsLeft) {
-            timerEl.textContent = secondsLeft;
-            
-            if (secondsLeft <= 5) {
-                timerEl.style.color = '#ff0000';
-            } else {
-                timerEl.style.color = '#ff6b6b';
-            }
+        function endRound(winner, movieName) {
+            clearCountdown();
+            if (hls) hls.pause();
+            statusOverlay.style.display = 'none';
+            timerFill.style.width = '0%';
+            revealBox.style.display = 'block';
+            movieTitleEl.textContent = movieName;
+            winnerTextEl.textContent = winner ? `${winner} guessed it!` : 'No one guessed it!';
         }
 
         function updateScoreboard(players) {
-            scoreboardList.innerHTML = '';
-            
-            // Sort by score descending
-            const sorted = [...players].sort((a, b) => b.score - a.score);
-            
-            sorted.forEach((player, index) => {
-                const div = document.createElement('div');
-                div.className = 'player-score';
-                if (player.name === winnerAnnouncementEl.textContent.replace(' wins!', '')) {
-                    div.classList.add('winner');
-                }
-                div.innerHTML = `
-                    <span class="player-name">${player.name}</span>
-                    <span class="player-points">${player.score} pts</span>
-                `;
-                scoreboardList.appendChild(div);
+            scoreList.innerHTML = '';
+            [...players].sort((a, b) => b.score - a.score).forEach(p => {
+                const row = document.createElement('div');
+                row.className = 'score-row';
+                row.innerHTML = `<span class="name">${p.name}</span><span class="pts">${p.score} pts</span>`;
+                scoreList.appendChild(row);
             });
         }
 
-        // Get room code
-        fetch('/api/code?room=default')
-            .then(res => res.json())
-            .then(data => {
-                roomCodeEl.textContent = data.code;
-            });
-
+        fetch('/api/code?room=default').then(r => r.json()).then(d => roomCodeEl.textContent = d.code);
         connect();
     </script>
 </body>
