@@ -274,13 +274,16 @@
         // Connect to WebSocket
         function connect() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            console.log('Connecting to WebSocket...');
             ws = new WebSocket(`${protocol}//${window.location.host}/ws?room=default`);
             
             ws.onopen = () => {
+                console.log('WebSocket connected, sending join...');
                 ws.send(JSON.stringify({ type: 'join', role: 'player', name: playerName }));
             };
             
             ws.onmessage = (event) => {
+                console.log('WS message:', event.data);
                 try {
                     const data = JSON.parse(event.data);
                     handleMessage(data);
@@ -290,7 +293,12 @@
             };
             
             ws.onclose = () => {
+                console.log('WebSocket closed, reconnecting...');
                 setTimeout(connect, 3000);
+            };
+
+            ws.onerror = (err) => {
+                console.error('WebSocket error:', err);
             };
         }
 
@@ -330,6 +338,7 @@
         }
 
         function loadVideo(url) {
+            console.log('Loading video:', url);
             if (hls) {
                 hls.destroy();
             }
