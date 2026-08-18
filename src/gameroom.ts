@@ -375,20 +375,26 @@ export class GameRoom {
 
     console.log('Master playlist URL:', masterPlaylistUrl);
     console.log('Media playlist URL:', mediaPlaylistUrl);
-    console.log('Segment URLs:', segmentUrls);
+    console.log(`Total segments available: ${segmentUrls.length}`);
+
+    // Only download segments needed for clip duration
+    const neededSegments = Math.ceil(duration / 6) + 1;
+    const segmentsToFetch = segmentUrls.slice(0, Math.max(neededSegments, 1));
+    console.log(`Downloading ${segmentsToFetch.length} segments (need ${duration}s clip)`);
 
     // Download and store segments
     const clipBasePath = `clips/${this.roomCode}/${roundNumber}`;
     const segmentNames: string[] = [];
 
-    for (let i = 0; i < segmentUrls.length; i++) {
-      const segmentResponse = await fetch(segmentUrls[i], {
+    for (let i = 0; i < segmentsToFetch.length; i++) {
+      const segmentResponse = await fetch(segmentsToFetch[i], {
         headers: { 'X-Emby-Token': this.env.EMBY_API_KEY },
+        signal: AbortSignal.timeout(15000),
       });
 
       if (!segmentResponse.ok) {
         const body = await segmentResponse.text();
-        throw new Error(`Failed to download segment ${i}: ${segmentResponse.status} - URL: ${segmentUrls[i]} - Body: ${body.substring(0, 200)}`);
+        throw new Error(`Failed to download segment ${i}: ${segmentResponse.status} - URL: ${segmentsToFetch[i]} - Body: ${body.substring(0, 200)}`);
       }
 
       const segmentName = `segment_${i}.ts`;

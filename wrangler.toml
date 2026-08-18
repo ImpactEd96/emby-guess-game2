@@ -30,3 +30,8 @@ EMBY_USER_ID = "9e7b29a7d9cb4920996f93ea911e9ac3"
 # EMBY_API_KEY should be set via: wrangler secret put EMBY_API_KEY
 # CLIP_QUEUE_DEPTH = "4"
 # CLIP_DURATION_SECONDS = "3"
+
+# Increase subrequest limit for clip staging (fetching Emby segments)
+[limits]
+max_subrequests = 1000
+cpu_ms = 30000
