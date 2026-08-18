@@ -196,7 +196,7 @@ export default {
           );
         }
 
-        const apiUrl = `${env.EMBY_URL}/Videos/${itemId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0`;
+        const apiUrl = `${env.EMBY_URL}/Videos/${itemId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0&PlaySessionId=${crypto.randomUUID()}`;
         const response = await fetch(apiUrl, {
           headers: { 'X-Emby-Token': env.EMBY_API_KEY },
         });
@@ -305,7 +305,7 @@ async function stageClip(env: Env, movieId: string, roomCode: string, roundNumbe
   }
 
   // Get HLS master playlist
-  const masterPlaylistUrl = `${env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0`;
+  const masterPlaylistUrl = `${env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0&PlaySessionId=${crypto.randomUUID()}`;
   const masterResponse = await fetch(masterPlaylistUrl, {
       headers: { 'X-Emby-Token': env.EMBY_API_KEY },
   });
