@@ -378,6 +378,7 @@ export class GameRoom {
 
     // Get HLS master playlist
     const playSessionId = crypto.randomUUID();
+    const masterPlaylistUrl = `${this.env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&PlaySessionId=${playSessionId}`;
     const masterResponse = await fetch(masterPlaylistUrl, {
       headers: { 'X-Emby-Token': this.env.EMBY_API_KEY },
     });
