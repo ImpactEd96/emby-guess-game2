@@ -208,7 +208,7 @@ export default {
             status: response.status,
             mediaSourceId,
             url: apiUrl,
-            responsePreview: responseText.substring(0, 1000),
+            playlist: responseText,
           }),
           { headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
         );
@@ -277,12 +277,13 @@ async function stageClip(env: Env, movieId: string, roomCode: string, roundNumbe
   const masterPlaylist = await masterResponse.text();
 
   // Parse the media playlist URL from master playlist
-  const mediaPlaylistMatch = masterPlaylist.match(/^(?!#)(.+\.m3u8)$/m);
-  if (!mediaPlaylistMatch) {
-    throw new Error('Could not find media playlist URL in master playlist');
+  const lines = masterPlaylist.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+  const playlistLine = lines.find(l => l.includes('.m3u8'));
+  if (!playlistLine) {
+    throw new Error(`Could not find media playlist URL in master playlist. Content: ${masterPlaylist.substring(0, 500)}`);
   }
 
-  const mediaPlaylistUrl = new URL(mediaPlaylistMatch[1], env.EMBY_URL).toString();
+  const mediaPlaylistUrl = new URL(playlistLine, `${env.EMBY_URL}/`).toString();
 
   // Get media playlist
   const mediaResponse = await fetch(mediaPlaylistUrl, {
@@ -297,9 +298,9 @@ async function stageClip(env: Env, movieId: string, roomCode: string, roundNumbe
 
   // Parse segment URLs from media playlist
   const segmentUrls: string[] = [];
-  const lines = mediaPlaylist.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+  const segmentLines = mediaPlaylist.split('\n');
+  for (let i = 0; i < segmentLines.length; i++) {
+    const line = segmentLines[i].trim();
     if (line && !line.startsWith('#')) {
       const segmentUrl = new URL(line, mediaPlaylistUrl).toString();
       segmentUrls.push(segmentUrl);

@@ -337,12 +337,14 @@ export class GameRoom {
     const masterPlaylist = await masterResponse.text();
 
     // Parse the media playlist URL from master playlist
-    const mediaPlaylistMatch = masterPlaylist.match(/^(?!#)(.+\.m3u8)$/m);
-    if (!mediaPlaylistMatch) {
-      throw new Error('Could not find media playlist URL in master playlist');
+    // Match non-comment lines that contain .m3u8 (with or without query params)
+    const lines = masterPlaylist.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+    const playlistLine = lines.find(l => l.includes('.m3u8'));
+    if (!playlistLine) {
+      throw new Error(`Could not find media playlist URL in master playlist. Content: ${masterPlaylist.substring(0, 500)}`);
     }
 
-    const mediaPlaylistUrl = new URL(mediaPlaylistMatch[1], this.env.EMBY_URL).toString();
+    const mediaPlaylistUrl = new URL(playlistLine, `${this.env.EMBY_URL}/`).toString();
 
     // Get media playlist
     const mediaResponse = await fetch(mediaPlaylistUrl, {
@@ -357,9 +359,9 @@ export class GameRoom {
 
     // Parse segment URLs from media playlist
     const segmentUrls: string[] = [];
-    const lines = mediaPlaylist.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
+    const segLines = mediaPlaylist.split('\n');
+    for (let i = 0; i < segLines.length; i++) {
+      const line = segLines[i].trim();
       if (line && !line.startsWith('#')) {
         const segmentUrl = new URL(line, mediaPlaylistUrl).toString();
         segmentUrls.push(segmentUrl);
