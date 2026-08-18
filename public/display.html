@@ -186,7 +186,7 @@
             revealBox.style.display = 'none';
             roundNumberEl.textContent = round.number;
 
-            if (clipUrl) loadVideo(clipUrl);
+            if (clipUrl) loadVideo(clipUrl + '?t=' + Date.now());
 
             // Start local countdown for guess window
             const guessMs = guessWindowDuration || 20000;
