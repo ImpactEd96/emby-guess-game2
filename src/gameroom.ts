@@ -386,28 +386,33 @@ export class GameRoom {
 
     const mediaPlaylist = await mediaResponse.text();
 
-    // Parse segment URLs from media playlist
+    // Parse segment URLs and durations from media playlist
     const segmentUrls: string[] = [];
     const segLines = mediaPlaylist.split('\n');
+    let segDuration = 6; // default fallback
     for (let i = 0; i < segLines.length; i++) {
       const line = segLines[i].trim();
-      if (line && !line.startsWith('#')) {
-        const segmentUrl = new URL(line, mediaPlaylistUrl).toString();
-        segmentUrls.push(segmentUrl);
+      if (line.startsWith('#EXTINF:')) {
+        const match = line.match(/#EXTINF:([\d.]+)/);
+        if (match) segDuration = parseFloat(match[1]);
+      } else if (line && !line.startsWith('#')) {
+        segmentUrls.push(new URL(line, mediaPlaylistUrl).toString());
       }
     }
 
-    console.log('Master playlist URL:', masterPlaylistUrl);
-    console.log('Media playlist URL:', mediaPlaylistUrl);
-    console.log(`Total segments available: ${segmentUrls.length}`);
+    console.log(`Total segments: ${segmentUrls.length}, segment duration: ${segDuration}s`);
 
-    // Only download segments needed for clip duration
-    const neededSegments = Math.ceil(duration / 6) + 1;
-    // Pick a random offset into the segment list to get a random part of the movie
-    const maxOffset = Math.max(segmentUrls.length - neededSegments - 1, 0);
-    const offset = maxOffset > 0 ? Math.floor(Math.random() * maxOffset) : 0;
+    // Trim first 10min and last 20min from valid range
+    const trimStart = Math.ceil((10 * 60) / segDuration);
+    const trimEnd = Math.ceil((20 * 60) / segDuration);
+    const safeStart = trimStart;
+    const safeEnd = Math.max(segmentUrls.length - trimEnd, trimStart + 1);
+
+    const neededSegments = Math.ceil(duration / segDuration) + 1;
+    const maxOffset = Math.max(safeEnd - safeStart - neededSegments, 0);
+    const offset = maxOffset > 0 ? safeStart + Math.floor(Math.random() * maxOffset) : safeStart;
     const segmentsToFetch = segmentUrls.slice(offset, offset + Math.max(neededSegments, 1));
-    console.log(`Downloading ${segmentsToFetch.length} segments from offset ${offset}/${segmentUrls.length} (need ${duration}s clip)`);
+    console.log(`Fetching ${segmentsToFetch.length} segments from offset ${offset}/${segmentUrls.length} (trimmed first 10m, last 20m)`);
 
     // Download and store segments
     const clipBasePath = `clips/${this.roomCode}/${roundNumber}`;
