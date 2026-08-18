@@ -24,6 +24,8 @@ export class GameRoom {
   private gameStarted: boolean = false;
   private roundInProgress: boolean = false;
   private alarmScheduled: boolean = false;
+  private alarmRound: number = 0;
+  private alarmAction: 'end_round' | 'next_round' = 'end_round';
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -200,6 +202,26 @@ export class GameRoom {
       if (player) {
         player.score += 1;
       }
+
+      // Broadcast to everyone that someone won
+      this.sendToAll({
+        type: 'round_end',
+        winner: playerName,
+        correctAnswer: currentRoundData.movieName,
+      });
+
+      // Send updated scoreboard
+      this.sendToAll({
+        type: 'scoreboard',
+        players: Array.from(this.players.values()).map((p) => ({
+          name: p.name,
+          score: p.score,
+        })),
+      });
+
+      // End round early after short reveal
+      currentRoundData.status = 'revealing';
+      await this.scheduleAlarm(3000, 'next_round');
     }
 
     this.sendToSocket(ws, {
@@ -306,26 +328,30 @@ export class GameRoom {
     });
 
     // After reveal pause, start next round
-    await this.scheduleAlarm(ROUND_TRANSITION_DELAY);
+    await this.scheduleAlarm(ROUND_TRANSITION_DELAY, 'next_round');
   }
 
-  private async scheduleAlarm(delayMs: number): Promise<void> {
+  private async scheduleAlarm(delayMs: number, action: 'end_round' | 'next_round' = 'end_round'): Promise<void> {
     const alarmTime = Date.now() + delayMs;
     await this.state.storage.setAlarm(alarmTime);
     this.alarmScheduled = true;
+    this.alarmRound = this.currentRound;
+    this.alarmAction = action;
   }
 
   async alarm(): Promise<void> {
     this.alarmScheduled = false;
 
+    // Stale alarm — round already moved on
+    if (this.alarmRound !== this.currentRound) return;
+
     const currentRoundData = this.rounds[this.currentRound - 1];
     if (!currentRoundData) return;
 
-    if (currentRoundData.status === 'playing') {
+    if (this.alarmAction === 'end_round' && currentRoundData.status === 'playing') {
       await this.endRound();
-    } else if (currentRoundData.status === 'revealing') {
+    } else if (this.alarmAction === 'next_round') {
       this.roundInProgress = false;
-      // Only start next round if players are connected
       const connectedPlayers = Array.from(this.players.values()).filter(p => p.connected);
       if (connectedPlayers.length > 0) {
         await this.startNewRound();
@@ -454,7 +480,7 @@ ${segmentNames.map((name) => `#EXTINF:${duration},\n${name}`).join('\n')}
   private async fetchMovies(): Promise<void> {
     console.log('Fetching movies from Emby...');
     const response = await fetch(
-      `${this.env.EMBY_URL}/Users/${this.env.EMBY_USER_ID}/Items?IncludeItemTypes=Movie&Recursive=true&Fields=Id,Name&Limit=50`,
+      `${this.env.EMBY_URL}/Users/${this.env.EMBY_USER_ID}/Items?IncludeItemTypes=Movie&Recursive=true&Fields=Id,Name`,
       {
         headers: {
           'X-Emby-Token': this.env.EMBY_API_KEY,
