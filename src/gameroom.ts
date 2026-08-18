@@ -385,7 +385,7 @@ export class GameRoom {
 
     // Get HLS master playlist
     const playSessionId = crypto.randomUUID();
-    const masterPlaylistUrl = `${this.env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=${startTime}&PlaySessionId=${playSessionId}`;
+    const masterPlaylistUrl = `${this.env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeTicks=${startTime * 10000000}&PlaySessionId=${playSessionId}`;
     const masterResponse = await fetch(masterPlaylistUrl, {
       headers: { 'X-Emby-Token': this.env.EMBY_API_KEY },
     });
@@ -436,6 +436,7 @@ export class GameRoom {
     const neededSegments = Math.ceil(duration / segDuration) + 1;
     const segmentsToFetch = segmentUrls.slice(0, Math.max(neededSegments, 1));
     console.log(`Segments available: ${segmentUrls.length}, fetching ${segmentsToFetch.length} (duration: ${segDuration}s, clip: ${duration}s)`);
+    console.log(`First segment URL: ${segmentsToFetch[0]?.substring(0, 120)}`);
 
     // Download and store segments
     const clipBasePath = `clips/${this.roomCode}/${roundNumber}`;
