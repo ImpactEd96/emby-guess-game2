@@ -386,6 +386,11 @@ export class GameRoom {
     // Get HLS master playlist
     const playSessionId = crypto.randomUUID();
     const masterPlaylistUrl = `${this.env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeTicks=${startTime * 10000000}&PlaySessionId=${playSessionId}`;
+
+    this.sendToAll({
+      type: 'error',
+      message: `[DEBUG] Seeking to ${startTime}s (${startTime * 10000000} ticks)`,
+    });
     const masterResponse = await fetch(masterPlaylistUrl, {
       headers: { 'X-Emby-Token': this.env.EMBY_API_KEY },
     });
@@ -435,8 +440,12 @@ export class GameRoom {
     // Just grab first 1-2 segments — Emby already starts from our random position
     const neededSegments = Math.ceil(duration / segDuration) + 1;
     const segmentsToFetch = segmentUrls.slice(0, Math.max(neededSegments, 1));
-    console.log(`Segments available: ${segmentUrls.length}, fetching ${segmentsToFetch.length} (duration: ${segDuration}s, clip: ${duration}s)`);
-    console.log(`First segment URL: ${segmentsToFetch[0]?.substring(0, 120)}`);
+
+    // Send debug info to displays so we can see what Emby returned
+    this.sendToAll({
+      type: 'error',
+      message: `[DEBUG] Segments: ${segmentUrls.length}, fetching: ${segmentsToFetch.length}, segDur: ${segDuration}s, startTime: ${startTime}s, firstUrl: ${segmentsToFetch[0]?.split('?')[0] || 'none'}`,
+    });
 
     // Download and store segments
     const clipBasePath = `clips/${this.roomCode}/${roundNumber}`;
