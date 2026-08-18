@@ -263,12 +263,10 @@ async function stageClip(env: Env, movieId: string, roomCode: string, roundNumbe
   }
 
   // Get HLS master playlist
-  const masterResponse = await fetch(
-    `${env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0`,
-    {
+  const masterPlaylistUrl = `${env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0`;
+  const masterResponse = await fetch(masterPlaylistUrl, {
       headers: { 'X-Emby-Token': env.EMBY_API_KEY },
-    }
-  );
+  });
 
   if (!masterResponse.ok) {
     throw new Error(`Failed to get master playlist: ${masterResponse.status}`);
@@ -283,7 +281,7 @@ async function stageClip(env: Env, movieId: string, roomCode: string, roundNumbe
     throw new Error(`Could not find media playlist URL in master playlist. Content: ${masterPlaylist.substring(0, 500)}`);
   }
 
-  const mediaPlaylistUrl = new URL(playlistLine, `${env.EMBY_URL}/`).toString();
+  const mediaPlaylistUrl = new URL(playlistLine, masterPlaylistUrl).toString();
 
   // Get media playlist
   const mediaResponse = await fetch(mediaPlaylistUrl, {

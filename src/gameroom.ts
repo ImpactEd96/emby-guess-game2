@@ -323,12 +323,10 @@ export class GameRoom {
     }
 
     // Get HLS master playlist
-    const masterResponse = await fetch(
-      `${this.env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0`,
-      {
-        headers: { 'X-Emby-Token': this.env.EMBY_API_KEY },
-      }
-    );
+    const masterPlaylistUrl = `${this.env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeSeconds=0`;
+    const masterResponse = await fetch(masterPlaylistUrl, {
+      headers: { 'X-Emby-Token': this.env.EMBY_API_KEY },
+    });
 
     if (!masterResponse.ok) {
       throw new Error(`Failed to get master playlist: ${masterResponse.status}`);
@@ -344,7 +342,7 @@ export class GameRoom {
       throw new Error(`Could not find media playlist URL in master playlist. Content: ${masterPlaylist.substring(0, 500)}`);
     }
 
-    const mediaPlaylistUrl = new URL(playlistLine, `${this.env.EMBY_URL}/`).toString();
+    const mediaPlaylistUrl = new URL(playlistLine, masterPlaylistUrl).toString();
 
     // Get media playlist
     const mediaResponse = await fetch(mediaPlaylistUrl, {
