@@ -435,10 +435,7 @@ export class GameRoom {
     const segmentsToFetch = segmentUrls.slice(offset, offset + neededSegments);
     console.log(`Fetching ${segmentsToFetch.length} segments from offset ${offset}/${segmentUrls.length}`);
 
-    this.sendToAll({
-      type: 'error',
-      message: `[DEBUG] ${segmentUrls.length} segments, offset ${offset}/${segmentUrls.length} (~${Math.floor(offset * segDuration / 60)}m), segDur: ${segDuration}s`,
-    });
+    console.log(`[CLIP] ${segmentUrls.length} segments, offset ${offset}/${segmentUrls.length} (~${Math.floor(offset * segDuration / 60)}m), segDur: ${segDuration}s`);
 
     // Download and store segments
     const clipBasePath = `clips/${this.roomCode}/${roundNumber}`;
@@ -463,10 +460,7 @@ export class GameRoom {
         httpMetadata: { contentType: 'video/mp2t' },
       });
 
-      this.sendToAll({
-        type: 'error',
-        message: `[DEBUG] Segment ${i}: url=${segmentsToFetch[i].split('/main/')[1]?.split('?')[0] || '?'} size=${segmentBody.byteLength}`,
-      });
+      console.log(`[CLIP] Segment ${i}: ${segmentsToFetch[i].split('/main/')[1]?.split('?')[0] || '?'} size=${segmentBody.byteLength}`);
     }
 
     // Create and store the clip playlist
