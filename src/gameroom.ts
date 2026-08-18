@@ -76,8 +76,9 @@ export class GameRoom {
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    let text: string;
     try {
-      const text = typeof message === 'string' ? message : new TextDecoder().decode(message);
+      text = typeof message === 'string' ? message : new TextDecoder().decode(message);
       const data = JSON.parse(text) as WSMessage;
 
       switch (data.type) {
@@ -89,7 +90,13 @@ export class GameRoom {
           break;
       }
     } catch (error) {
-      this.sendToSocket(ws, { type: 'error', message: 'Invalid message format' });
+      if (error instanceof SyntaxError) {
+        console.error('WS parse error:', error.message);
+        this.sendToSocket(ws, { type: 'error', message: 'Invalid message format' });
+      } else {
+        console.error('WS handler error:', error);
+        this.sendToSocket(ws, { type: 'error', message: String(error) });
+      }
     }
   }
 
@@ -131,7 +138,11 @@ export class GameRoom {
       // Auto-start game on first player join
       if (!this.gameStarted && this.players.size > 0) {
         this.gameStarted = true;
-        await this.startNewRound();
+        this.startNewRound().catch((err) => {
+          console.error('startNewRound failed:', err);
+          this.sendToAll({ type: 'error', message: `Round failed: ${err.message}` });
+          this.roundInProgress = false;
+        });
       }
     }
   }
@@ -224,7 +235,14 @@ export class GameRoom {
     this.rounds.push(round);
 
     // Stage the first clip synchronously before broadcasting
-    await this.stageClip(movie.id, this.currentRound);
+    try {
+      await this.stageClip(movie.id, this.currentRound);
+    } catch (err) {
+      console.error(`Failed to stage clip for round ${this.currentRound}:`, err);
+      this.sendToAll({ type: 'error', message: `Failed to load clip: ${(err as Error).message}` });
+      this.roundInProgress = false;
+      return;
+    }
 
     round.status = 'playing';
     round.guessWindowStart = Date.now();
