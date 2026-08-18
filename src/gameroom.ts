@@ -251,9 +251,9 @@ export class GameRoom {
       await this.fetchMovies();
     }
 
-    // Try up to 5 movies if clip staging fails
+    // Try up to 3 movies if clip staging fails
     let lastError: Error | null = null;
-    for (let attempt = 0; attempt < 5; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       const movie = this.movieQueue.shift();
       if (!movie) {
         console.error('No movies available');
@@ -301,7 +301,7 @@ export class GameRoom {
     }
 
     // All attempts failed
-    this.sendToAll({ type: 'error', message: `Failed to load clip after 5 attempts: ${lastError?.message}` });
+    this.sendToAll({ type: 'error', message: `Failed to load clip after 3 attempts: ${lastError?.message}` });
     this.roundInProgress = false;
   }
 
@@ -480,7 +480,7 @@ ${segmentNames.map((name) => `#EXTINF:${duration},\n${name}`).join('\n')}
   private async fetchMovies(): Promise<void> {
     console.log('Fetching movies from Emby...');
     const response = await fetch(
-      `${this.env.EMBY_URL}/Users/${this.env.EMBY_USER_ID}/Items?IncludeItemTypes=Movie&Recursive=true&Fields=Id,Name`,
+      `${this.env.EMBY_URL}/Users/${this.env.EMBY_USER_ID}/Items?IncludeItemTypes=Movie&Recursive=true&Fields=Id,Name&Limit=500&SortBy=Random`,
       {
         headers: {
           'X-Emby-Token': this.env.EMBY_API_KEY,
@@ -497,11 +497,6 @@ ${segmentNames.map((name) => `#EXTINF:${duration},\n${name}`).join('\n')}
         name: item.Name,
       }));
       console.log(`Got ${this.movieQueue.length} movies`);
-      // Shuffle the queue
-      for (let i = this.movieQueue.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [this.movieQueue[i], this.movieQueue[j]] = [this.movieQueue[j], this.movieQueue[i]];
-      }
     }
   }
 
