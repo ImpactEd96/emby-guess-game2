@@ -364,33 +364,20 @@ export class GameRoom {
   private async stageClip(movieId: string, roundNumber: number): Promise<void> {
     const duration = parseInt(this.env.CLIP_DURATION_SECONDS || '3');
 
-    // Get media source ID + runtime
+    // Get media source ID
     const itemResponse = await fetch(
-      `${this.env.EMBY_URL}/Users/${this.env.EMBY_USER_ID}/Items/${movieId}?Fields=MediaSources,RunTimeTicks`,
+      `${this.env.EMBY_URL}/Users/${this.env.EMBY_USER_ID}/Items/${movieId}?Fields=MediaSources`,
       { headers: { 'X-Emby-Token': this.env.EMBY_API_KEY }, signal: AbortSignal.timeout(15000) }
     );
-    const itemData = await itemResponse.json() as { MediaSources?: Array<{ Id: string }>; RunTimeTicks?: number };
+    const itemData = await itemResponse.json() as { MediaSources?: Array<{ Id: string }> };
     const mediaSourceId = itemData.MediaSources?.[0]?.Id;
 
     if (!mediaSourceId) {
       throw new Error('No media source found for movie');
     }
 
-    // Pick random start time, trimming first 10min and last 20min
-    const totalSeconds = Math.floor((itemData.RunTimeTicks || 72000000000) / 10000000);
-    const earliest = 10 * 60;
-    const latest = Math.max(totalSeconds - 20 * 60, earliest + 30);
-    const startTime = Math.floor(Math.random() * (latest - earliest)) + earliest;
-    console.log(`Movie: ${totalSeconds}s, clip starts at ${startTime}s (${Math.floor(startTime/60)}m${startTime%60}s)`);
-
     // Get HLS master playlist
     const playSessionId = crypto.randomUUID();
-    const masterPlaylistUrl = `${this.env.EMBY_URL}/Videos/${movieId}/master.m3u8?MediaSourceId=${mediaSourceId}&Static=false&VideoCodec=h264&AudioCodec=aac&VideoBitRate=2000000&AudioBitRate=128000&MaxStreamingBitrate=2000000&StartTimeTicks=${startTime * 10000000}&PlaySessionId=${playSessionId}`;
-
-    this.sendToAll({
-      type: 'error',
-      message: `[DEBUG] Seeking to ${startTime}s (${startTime * 10000000} ticks)`,
-    });
     const masterResponse = await fetch(masterPlaylistUrl, {
       headers: { 'X-Emby-Token': this.env.EMBY_API_KEY },
     });
@@ -437,14 +424,19 @@ export class GameRoom {
       }
     }
 
-    // Just grab first 1-2 segments — Emby already starts from our random position
+    // Pick random segment offset, trimming first 10min and last 20min
     const neededSegments = Math.ceil(duration / segDuration) + 1;
-    const segmentsToFetch = segmentUrls.slice(0, Math.max(neededSegments, 1));
+    const trimStart = Math.ceil((10 * 60) / segDuration);
+    const trimEnd = Math.ceil((20 * 60) / segDuration);
+    const safeEnd = Math.max(segmentUrls.length - trimEnd, trimStart + 1);
+    const maxOffset = Math.max(safeEnd - trimStart - neededSegments, 0);
+    const offset = maxOffset > 0 ? trimStart + Math.floor(Math.random() * maxOffset) : trimStart;
+    const segmentsToFetch = segmentUrls.slice(offset, offset + neededSegments);
+    console.log(`Fetching ${segmentsToFetch.length} segments from offset ${offset}/${segmentUrls.length}`);
 
-    // Send debug info to displays so we can see what Emby returned
     this.sendToAll({
       type: 'error',
-      message: `[DEBUG] Segments: ${segmentUrls.length}, fetching: ${segmentsToFetch.length}, segDur: ${segDuration}s, startTime: ${startTime}s, firstUrl: ${segmentsToFetch[0]?.split('?')[0] || 'none'}`,
+      message: `[DEBUG] ${segmentUrls.length} segments, offset ${offset}/${segmentUrls.length} (~${Math.floor(offset * segDuration / 60)}m), segDur: ${segDuration}s`,
     });
 
     // Download and store segments
