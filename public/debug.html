@@ -196,9 +196,39 @@
             </div>
             <div class="test-details" id="pipelineDetails"></div>
         </div>
+        <div class="test-section">
+            <h2>8. Clip Player</h2>
+            <div style="margin-bottom:10px">
+                <input type="text" id="clipUrl" placeholder="/clip/880E/1/playlist.m3u8" style="width:70%;padding:10px;background:#333;color:white;border:1px solid #555;border-radius:5px;font-size:1rem;">
+                <button onclick="playClip()" style="padding:10px 20px;background:#e94560;color:white;border:none;border-radius:5px;font-weight:bold;cursor:pointer;">Play</button>
+            </div>
+            <video id="clipVideo" controls style="width:100%;max-height:400px;background:#000;border-radius:5px;display:none;"></video>
+            <div id="clipStatus" style="margin-top:8px;color:#888;font-size:0.9rem;"></div>
+        </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.0/dist/hls.min.js"></script>
     <script>
+        let clipHls = null;
+        function playClip() {
+            const url = document.getElementById('clipUrl').value.trim();
+            if (!url) return;
+            const video = document.getElementById('clipVideo');
+            const status = document.getElementById('clipStatus');
+            video.style.display = 'block';
+            status.textContent = 'Loading...';
+            if (clipHls) clipHls.destroy();
+            if (Hls.isSupported()) {
+                clipHls = new Hls();
+                clipHls.loadSource(url);
+                clipHls.attachMedia(video);
+                clipHls.on(Hls.Events.MANIFEST_PARSED, () => { video.play(); status.textContent = 'Playing'; });
+                clipHls.on(Hls.Events.ERROR, (e, data) => { status.textContent = 'Error: ' + data.type; });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = url;
+                video.play();
+            }
+        }
         async function runTest(name, endpoint, options = {}) {
             const statusEl = document.getElementById(`${name}Status`);
             const detailsEl = document.getElementById(`${name}Details`);

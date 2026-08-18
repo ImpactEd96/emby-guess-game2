@@ -462,6 +462,11 @@ export class GameRoom {
       await this.env.CLIPS_BUCKET.put(`${clipBasePath}/${segmentName}`, segmentBody, {
         httpMetadata: { contentType: 'video/mp2t' },
       });
+
+      this.sendToAll({
+        type: 'error',
+        message: `[DEBUG] Segment ${i}: url=${segmentsToFetch[i].split('/main/')[1]?.split('?')[0] || '?'} size=${segmentBody.byteLength}`,
+      });
     }
 
     // Create and store the clip playlist
